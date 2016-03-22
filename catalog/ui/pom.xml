@@ -25,6 +25,7 @@
     <groupId>ddf.ui</groupId>
     <packaging>pom</packaging>
     <modules>
+        <module>catalog-ui-search</module>
         <module>search-ui</module>
     </modules>
     <properties>
