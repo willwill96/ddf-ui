@@ -202,6 +202,10 @@ public interface Metacard extends Serializable {
      *
      * @since DDF-2.9.0
      */
+    public static final String RELATED = "metacard.associations.related";
+
+    public static final String DERIVED = "metacard.associations.derived";
+
     String RESOURCE_CHECKSUM_ALGORITHM = "resource-checksum-algorithm";
 
     /**
