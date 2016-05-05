@@ -19,11 +19,12 @@ define([
     'jquery',
     'text!./details-user.hbs',
     'js/CustomElements',
-], function (Marionette, _, $, template, CustomElements) {
+    'js/store'
+], function (Marionette, _, $, template, CustomElements, store) {
 
     return Marionette.ItemView.extend({
         setDefaultModel: function(){
-            //override
+            this.model = store.get('user');
         },
         template: template,
         tagName: CustomElements.register('details-user'),
@@ -31,6 +32,12 @@ define([
             if (options.model === undefined){
                 this.setDefaultModel();
             }
+        },
+        events: {
+            'click #sign-in': 'signIn'
+        },
+        signIn: function() {
+            
         }
     });
 });

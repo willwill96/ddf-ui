@@ -17,11 +17,12 @@ define([
     'underscore',
     'js/model/Workspace',
     'js/model/source',
+    'js/model/User',
     'component/workspaces/workspaces',
     'js/model/Selected',
     'component/content/content',
     'component/router/router'
-], function (Backbone, poller, _, Workspace, Source, Workspaces, Selected, Content, Router) {
+], function (Backbone, poller, _, Workspace, Source, User, Workspaces, Selected, Content, Router) {
 
     return new (Backbone.Model.extend({
         defaults: {
@@ -56,6 +57,9 @@ define([
                 listeners: {
                     'change:currentWorkspace': this.clearResults
                 }
+            }));
+            this.set('user', this.initModel(User, {
+                persisted: false
             }));
             this.set('workspaces', this.initModel(Workspace.Collection, {
                 listeners: {
