@@ -18,13 +18,18 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import javax.ws.rs.BadRequestException;
+import javax.ws.rs.NotFoundException;
 
 import org.boon.json.JsonFactory;
 import org.boon.json.JsonParserFactory;
@@ -52,6 +57,14 @@ public class EndpointUtil {
 
     private final FilterBuilder filterBuilder;
 
+    private final static int DEFAULT_PAGE_SIZE = 10;
+
+    @SuppressWarnings("unchecked")
+    public static <T, R extends Comparable> Comparator<T> compareBy(Function<T, R> getField) {
+        return (T o1, T o2) -> getField.apply(o1)
+                .compareTo(getField.apply(o2));
+    }
+
     public EndpointUtil(List<MetacardType> metacardTypes, CatalogFramework catalogFramework,
             FilterBuilder filterBuilder) {
         this.metacardTypes = metacardTypes;
@@ -76,7 +89,7 @@ public class EndpointUtil {
                 filter), true));
 
         if (queryResponse.getHits() == 0) {
-            throw new StandardSearchException("Could not find metacard for that metacard id");
+            throw new NotFoundException("Could not find metacard for id: " + id);
         }
 
         Result result = queryResponse.getResults()
@@ -84,21 +97,13 @@ public class EndpointUtil {
         return result.getMetacard();
     }
 
-    public List<String> getStringList(List<Serializable> list) {
-        if (list == null) {
-            return new ArrayList<>();
-        }
-        return list.stream()
-                .map(String::valueOf)
-                .collect(Collectors.toList());
-    }
-
     public Map<String, Result> getMetacards(Collection<String> ids, String tagFilter)
             throws UnsupportedQueryException, SourceUnavailableException, FederationException {
         return getMetacards(Metacard.ID, ids, tagFilter);
     }
 
-    public Map<String, Result> getMetacards(String attributeName, Collection<String> ids, String tag)
+    public Map<String, Result> getMetacards(String attributeName, Collection<String> ids,
+            String tag)
             throws UnsupportedQueryException, SourceUnavailableException, FederationException {
         if (ids.isEmpty()) {
             return new HashMap<>();
@@ -153,13 +158,22 @@ public class EndpointUtil {
         return resultTypes;
     }
 
-    public Map<String, Object> transformToJson(Metacard metacard) {
-        return transformToJson(Collections.singletonList(metacard));
+    public List<String> getStringList(List<Serializable> list) {
+        if (list == null) {
+            return new ArrayList<>();
+        }
+        return list.stream()
+                .map(String::valueOf)
+                .collect(Collectors.toList());
     }
 
-    public Map<String, Object> transformToJson(List<Metacard> metacards) {
+    public Map<String, Object> transformToMap(Metacard metacard) {
+        return transformToMap(Collections.singletonList(metacard));
+    }
+
+    public Map<String, Object> transformToMap(List<Metacard> metacards) {
         List<Map<String, Object>> metacardJsons = metacards.stream()
-                .map(this::getMetacardJson)
+                .map(this::getMetacardMap)
                 .collect(Collectors.toList());
 
         Set<String> types = metacards.stream()
@@ -190,7 +204,73 @@ public class EndpointUtil {
         return outerMap;
     }
 
-    private Map<String, Object> getMetacardJson(Metacard metacard) {
+    public String metacardToJson(String id)
+            throws SourceUnavailableException, UnsupportedQueryException, StandardSearchException,
+            FederationException {
+        Metacard metacard = getMetacard(id);
+        if (metacard == null) {
+            throw new NotFoundException("Could not find specified Metacard. (id= " + id + " )");
+        }
+        return metacardToJson(metacard);
+    }
+
+    public String metacardToJson(Metacard metacard)
+            throws SourceUnavailableException, UnsupportedQueryException, StandardSearchException,
+            FederationException {
+        return getJson(transformToMap(metacard));
+    }
+
+    public String metacardsToJson(List<Metacard> metacards) {
+        return getJson(transformToMap(metacards));
+    }
+
+    public String getJson(Object result) {
+        return JsonFactory.create(new JsonParserFactory(),
+                new JsonSerializerFactory().includeNulls()
+                        .includeEmpty())
+                .toJson(result);
+    }
+
+    public Optional<MetacardType> getMetacardType(String name) {
+        return metacardTypes.stream()
+                .filter(mt -> mt.getName()
+                        .equals(name))
+                .findFirst();
+    }
+
+    public List<Metacard> getRecentMetacards(int pageSize, int pageNumber, String emailAddress)
+            throws UnsupportedQueryException, SourceUnavailableException, FederationException {
+        pageSize = pageSize == 0 ? DEFAULT_PAGE_SIZE : pageSize;
+        pageNumber = pageNumber == 0 ? 1 : pageNumber;
+        if (pageNumber <= 0) {
+            throw new BadRequestException(
+                    "Page Number cannot be less than or equal to 0. (pageNumber= " + pageNumber
+                            + " )");
+        }
+
+        // TODO (RCZ) - use real attribute once here
+        Filter userFilter = filterBuilder.attribute("Metacard.OWNER")
+                .is()
+                .equalTo()
+                .text(emailAddress);
+
+        int startIndex = 1 + ((pageNumber - 1) * pageSize);
+        QueryResponse queryResponse = catalogFramework.query(new QueryRequestImpl(new QueryImpl(
+                userFilter,
+                startIndex,
+                pageSize,
+                SortBy.NATURAL_ORDER,
+                false,
+                TimeUnit.SECONDS.toMillis(10))));
+
+        //// TODO (RCZ) - now need to sort and return results.
+        return queryResponse.getResults()
+                .stream()
+                .map(Result::getMetacard)
+                .collect(Collectors.toList());
+    }
+
+    private Map<String, Object> getMetacardMap(Metacard metacard) {
         Set<AttributeDescriptor> attributeDescriptors = metacard.getMetacardType()
                 .getAttributeDescriptors();
         Map<String, Object> result = new HashMap<>();
@@ -227,17 +307,4 @@ public class EndpointUtil {
         return result;
     }
 
-    public String getJson(Object result) {
-        return JsonFactory.create(new JsonParserFactory(),
-                new JsonSerializerFactory().includeNulls()
-                        .includeEmpty())
-                .toJson(result);
-    }
-
-    public Optional<MetacardType> getMetacardType(String name) {
-        return metacardTypes.stream()
-                .filter(mt -> mt.getName()
-                        .equals(name))
-                .findFirst();
-    }
 }

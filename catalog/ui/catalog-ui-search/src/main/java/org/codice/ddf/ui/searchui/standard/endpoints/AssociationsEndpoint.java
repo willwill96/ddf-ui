@@ -49,6 +49,8 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 public class AssociationsEndpoint {
     private static final Logger LOGGER = LoggerFactory.getLogger(AssociationsEndpoint.class);
 
+    private static final String ASSOCIATION_PREFIX = "metacard.associations.";
+
     private final CatalogFramework catalogFramework;
 
     private final FilterBuilder filterBuilder;
@@ -70,6 +72,34 @@ public class AssociationsEndpoint {
         return getAssociationsResponse(associated);
     }
 
+    @PUT
+    @Path("/{id}")
+    public Response putAssociations(@PathParam("id") String id, String body) throws Exception {
+        List<AssociationResponse> associations = JsonFactory.create()
+                .parser()
+                .parseList(AssociationResponse.class, body);
+
+        Metacard metacard = endpointUtil.getMetacard(id);
+        List<Attribute> updatedAttributes = getUpdatedAttributes(associations);
+        updatedAttributes.forEach(metacard::setAttribute);
+        UpdateResponse update = catalogFramework.update(new UpdateRequestImpl(id, metacard));
+
+        return getAssociationsResponse(getAssociatedMetacardIdsFromMetacard(update.getUpdatedMetacards()
+                .get(0)
+                .getNewMetacard()));
+    }
+
+    private List<Attribute> getUpdatedAttributes(List<AssociationResponse> associations) {
+        List<Attribute> updatedAttributes = new ArrayList<>(); for (AssociationResponse association : associations) {
+            ArrayList<String> newIds = new ArrayList<>();
+            for (AssociationItem ai : association.metacards) {
+                newIds.add(ai.id);
+            }
+            updatedAttributes.add(new AttributeImpl(ASSOCIATION_PREFIX + association.type, newIds));
+        }
+        return updatedAttributes;
+    }
+
     private Response getAssociationsResponse(Associated associated)
             throws UnsupportedQueryException, SourceUnavailableException, FederationException {
         List<String> ids = new ArrayList<>();
@@ -78,54 +108,29 @@ public class AssociationsEndpoint {
 
         Map<String, Result> results = endpointUtil.getMetacards(ids, "*");
 
-        AndrewAssociation aaRelated = new AndrewAssociation();
-        aaRelated.type = "related";
+        AssociationResponse relatedAssociations = new AssociationResponse();
+        relatedAssociations.type = "related";
         for (String relatedId : associated.related) {
-            aaRelated.metacards.add(new AssociationItem(relatedId,
+            relatedAssociations.metacards.add(new AssociationItem(relatedId,
                     results.get(relatedId)
                             .getMetacard()
                             .getTitle()));
         }
 
-        AndrewAssociation aaDerived = new AndrewAssociation();
-        aaDerived.type = "derived";
+        AssociationResponse derivedAssociations = new AssociationResponse();
+        derivedAssociations.type = "derived";
         for (String derivedId : associated.derived) {
-            aaDerived.metacards.add(new AssociationItem(derivedId,
+            derivedAssociations.metacards.add(new AssociationItem(derivedId,
                     results.get(derivedId)
                             .getMetacard()
                             .getTitle()));
         }
 
-        List<AndrewAssociation> associations = new ArrayList<>();
-        associations.add(aaDerived);
-        associations.add(aaRelated);
+        List<AssociationResponse> associations = new ArrayList<>();
+        associations.add(derivedAssociations);
+        associations.add(relatedAssociations);
         return Response.ok(endpointUtil.getJson(associations), MediaType.APPLICATION_JSON)
                 .build();
-    }
-
-    private static final String ASSOCIATION_PREFIX = "metacard.associations.";
-
-    @PUT
-    @Path("/{id}")
-    public Response putAssociations(@PathParam("id") String id, String body) throws Exception {
-        List<AndrewAssociation> associations = JsonFactory.create()
-                .parser()
-                .parseList(AndrewAssociation.class, body);
-        Metacard metacard = endpointUtil.getMetacard(id);
-        List<Attribute> updatedAttributes = new ArrayList<>();
-        for (AndrewAssociation association : associations) {
-            ArrayList<String> newIds = new ArrayList<>();
-            for (AssociationItem ai : association.metacards) {
-                newIds.add(ai.id);
-            }
-            updatedAttributes.add(new AttributeImpl(ASSOCIATION_PREFIX + association.type, newIds));
-        }
-        updatedAttributes.forEach(metacard::setAttribute);
-        UpdateResponse update = catalogFramework.update(new UpdateRequestImpl(id, metacard));
-
-        return getAssociationsResponse(getAssociatedMetacardIdsFromMetacard(update.getUpdatedMetacards()
-                .get(0)
-                .getNewMetacard()));
     }
 
     private Set<String> deleteAssociation(String id, String associatedId, String attributeId)
@@ -209,35 +214,9 @@ public class AssociationsEndpoint {
         }
     }
 
-    private static class AndrewAssociation {
+    private static class AssociationResponse {
         String type;
 
         List<AssociationItem> metacards = new ArrayList<>();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
