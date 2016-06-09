@@ -72,7 +72,7 @@ public class QueryApplication implements SparkApplication {
             return mapper.toJson(cqlQueryResponse);
         });
 
-        after((req, res) -> {
+        after("/cql", (req, res) -> {
             res.type(APPLICATION_JSON);
             res.header("Content-Encoding", "gzip");
         });

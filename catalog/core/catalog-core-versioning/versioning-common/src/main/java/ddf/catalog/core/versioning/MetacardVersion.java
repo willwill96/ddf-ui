@@ -15,6 +15,7 @@ package ddf.catalog.core.versioning;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -69,6 +70,19 @@ public class MetacardVersion extends MetacardImpl {
         public static Action fromKey(String key) {
             return keyMap.get(key);
         }
+
+        public static Action ofMetacard(Metacard metacard) {
+            if (isNotVersion(metacard)) {
+                throw new IllegalArgumentException(
+                        "Cannot get action of a non version metacard [" + metacard.getId() + "]");
+            }
+            Serializable svalue = metacard.getAttribute(ACTION).getValue();
+            if (!(svalue instanceof String)) {
+                throw new IllegalArgumentException("The action attribute must be a string");
+            }
+            String value = (String) svalue;
+            return keyMap.get(value);
+        }
     }
 
     public static final String ALREADY_VERSIONED = "already-versioned";
@@ -77,8 +91,7 @@ public class MetacardVersion extends MetacardImpl {
 
     private static final String VERSION_PREFIX = "metacard.version";
 
-    private static Function<String, String> prefix = s -> String.format("%s.%s", VERSION_PREFIX,
-            s);
+    private static Function<String, String> prefix = s -> String.format("%s.%s", VERSION_PREFIX, s);
 
     /**
      * {@link ddf.catalog.data.Attribute} value for {@link ddf.catalog.data.Metacard#TAGS} when
@@ -226,12 +239,21 @@ public class MetacardVersion extends MetacardImpl {
         }
     }
 
+    protected static MetacardVersion toVersion(Metacard metacard) {
+        if (!(metacard instanceof MetacardVersion)) {
+            throw new IllegalArgumentException("Metacard must be a instanceof MetacardVersion");
+        }
+        return (MetacardVersion) metacard;
+    }
+
     public static boolean isNotVersion(Metacard metacard) {
         return !isVersion(metacard);
     }
 
     public static boolean isVersion(Metacard metacard) {
-        return getMetacardVersionType().getName().equals(metacard.getMetacardType().getName());
+        return metacard instanceof MetacardVersion || getMetacardVersionType().getName()
+                .equals(metacard.getMetacardType()
+                        .getName());
     }
 
     public String getVersionOfId() {

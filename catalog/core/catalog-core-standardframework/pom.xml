@@ -226,6 +226,11 @@
             <artifactId>mime-core-impl</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--<dependency>-->
+            <!--<groupId>ddf.security.handler</groupId>-->
+            <!--<artifactId>security-handler-api</artifactId>-->
+            <!--<version>${project.version}</version>-->
+        <!--</dependency>-->
     </dependencies>
     <build>
         <plugins>
@@ -359,6 +364,7 @@
                             org.apache.xerces.xni.parser,
                             org.apache.xml.resolver,
                             org.apache.xml.resolver.helpers,
+                            <!--org.codice.ddf.security.handler.api,-->
                             org.geotools.filter.visitor,
                             org.joda.convert,
                             org.opengis.annotation,
