@@ -50,6 +50,11 @@
             <artifactId>ddf-security-common</artifactId>
         </dependency>
         <dependency>
+            <groupId>ddf.security.handler</groupId>
+            <artifactId>security-handler-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>ddf.catalog.core</groupId>
             <artifactId>catalog-core-metricsplugin</artifactId>
             <version>${project.version}</version>
@@ -244,18 +249,18 @@
                         <Private-Package>
                             ddf.catalog.cache.impl,
                             ddf.catalog.cache.solr.impl,
-                            ddf.catalog.event.retrievestatus,
-                            ddf.catalog.impl,
                             ddf.catalog.data.impl,
-                            ddf.catalog.operation.impl,
-                            ddf.catalog.util.impl,
+                            ddf.catalog.event.retrievestatus,
                             ddf.catalog.federation.base,
                             ddf.catalog.filter.impl,
-                            ddf.catalog.source.impl,
+                            ddf.catalog.history,
+                            ddf.catalog.impl,
+                            ddf.catalog.operation.impl,
                             ddf.catalog.resource.download,
                             ddf.catalog.resource.impl,
                             ddf.catalog.resourceretriever,
-                            ddf.catalog.history,
+                            ddf.catalog.source.impl,
+                            ddf.catalog.util.impl,
                             org.codice.ddf.platform.util
                         </Private-Package>
                         <Export-Package>
@@ -296,7 +301,10 @@
                             ddf.measure;version="2.0",
                             ddf.mime,
                             ddf.security,
+                            org.codice.ddf.security.handler.api,
+                            ddf.security.assertion,
                             ddf.security.permission,
+                            ddf.security.service,
                             javax.activation,
                             javax.annotation,
                             javax.crypto,
@@ -335,6 +343,7 @@
                             javax.xml.xpath,
                             jline,
                             org.apache.commons.logging;version="[1.1,2)",
+                            org.apache.cxf.ws.security.tokenstore,
                             org.apache.cxf.jaxrs.client,
                             org.apache.cxf.jaxrs.ext.multipart,
                             org.apache.shiro,

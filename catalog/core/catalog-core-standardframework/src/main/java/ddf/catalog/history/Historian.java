@@ -45,6 +45,7 @@ import ddf.catalog.operation.impl.CreateRequestImpl;
 import ddf.catalog.operation.impl.CreateResponseImpl;
 import ddf.catalog.operation.impl.UpdateResponseImpl;
 import ddf.catalog.source.IngestException;
+import ddf.catalog.source.SourceUnavailableException;
 import ddf.security.Subject;
 
 public class Historian {
@@ -87,7 +88,8 @@ public class Historian {
     }
 
     public UpdateResponse versionUpdate(UpdateResponse updateResponse,
-            CatalogFramework catalogFramework, StorageProvider storage) {
+            CatalogFramework catalogFramework, StorageProvider storage)
+            throws SourceUnavailableException, IngestException {
         if (!historyEnabled) {
             return updateResponse;
         }
@@ -122,6 +124,7 @@ public class Historian {
                 updateResponse.getProcessingErrors());
     }
 
+    @SuppressWarnings("unchecked")
     public CreateStorageRequest versionStorageCreate(CreateStorageRequest createStorageRequest) throws IngestException {
         if (!historyEnabled) {
             return createStorageRequest;
@@ -245,7 +248,8 @@ public class Historian {
     }
 
     private CreateResponse getVersionedMetacards(List<Metacard> metacards,
-            final MetacardVersion.Action action, CatalogFramework catalogFramework) {
+            final MetacardVersion.Action action, CatalogFramework catalogFramework)
+            throws SourceUnavailableException, IngestException {
         final List<Metacard> versionedMetacards = metacards.stream()
                 .filter(metacard -> !metacard.getMetacardType()
                         .equals(MetacardVersion.getMetacardVersionType()))
@@ -255,15 +259,7 @@ public class Historian {
         if (versionedMetacards.isEmpty()) {
             return null;
         }
-
-        Subject system = Security.getInstance()
-                .getSystemSubject();
-        if (system == null) {
-            LOGGER.warn("Could not get system subject to create versioned metacards.");
-            return null;
-        }
-
-        return system.execute(() -> catalogFramework.create(new CreateRequestImpl(metacards)));
+        return catalogFramework.create(new CreateRequestImpl(metacards));
     }
 
     public CreateResponse removeHistoryItems(CreateResponse input) {
