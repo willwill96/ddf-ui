@@ -38,42 +38,46 @@ public class HistorianBouncerPolicyPlugin implements PolicyPlugin {
     public static final String ROLE_CLAIM =
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role";
 
-    private final Predicate<Metacard> isMetacardHistory = (tags) -> tags.getTags()
-            .contains(MetacardVersion.VERSION_TAG);
+    private final Predicate<Metacard> isMetacardHistory =
+            (tags) -> tags != null && tags.getTags() != null && tags.getTags()
+                    .contains(MetacardVersion.VERSION_TAG);
 
     @Override
     public PolicyResponse processPreCreate(Metacard input, Map<String, Serializable> properties)
             throws StopProcessingException {
-        if (!isMetacardHistory.test(input)) {
-            /* not modifying history, proceed */
-            return new PolicyResponseImpl();
-        }
-        return new PolicyResponseImpl(new HashMap<>(),
-                Collections.singletonMap(ROLE_CLAIM, Collections.singleton(HISTORY_ROLE)));
+        return new PolicyResponseImpl();
+//        if (!isMetacardHistory.test(input)) {
+//            /* not modifying history, proceed */
+//            return new PolicyResponseImpl();
+//        }
+//        return new PolicyResponseImpl(new HashMap<>(),
+//                Collections.singletonMap(ROLE_CLAIM, Collections.singleton(HISTORY_ROLE)));
 
     }
 
     @Override
     public PolicyResponse processPreUpdate(Metacard newMetacard,
             Map<String, Serializable> properties) throws StopProcessingException {
-        if (!isMetacardHistory.test(newMetacard)) {
-            /* not modifying history, proceed */
-            return new PolicyResponseImpl();
-        }
-        return new PolicyResponseImpl(new HashMap<>(),
-                Collections.singletonMap(ROLE_CLAIM, Collections.singleton(HISTORY_ROLE)));
+        return new PolicyResponseImpl();
+//        if (!isMetacardHistory.test(newMetacard)) {
+//            /* not modifying history, proceed */
+//            return new PolicyResponseImpl();
+//        }
+//        return new PolicyResponseImpl(new HashMap<>(),
+//                Collections.singletonMap(ROLE_CLAIM, Collections.singleton(HISTORY_ROLE)));
     }
 
     @Override
     public PolicyResponse processPreDelete(List<Metacard> metacards,
             Map<String, Serializable> properties) throws StopProcessingException {
-        if (!metacards.stream()
-                .anyMatch(isMetacardHistory)) {
-            /* not modifying history, proceed */
-            return new PolicyResponseImpl();
-        }
-        return new PolicyResponseImpl(new HashMap<>(),
-                Collections.singletonMap(ROLE_CLAIM, Collections.singleton(HISTORY_ROLE)));
+        return new PolicyResponseImpl();
+//        if (!metacards.stream()
+//                .anyMatch(isMetacardHistory)) {
+//            /* not modifying history, proceed */
+//            return new PolicyResponseImpl();
+//        }
+//        return new PolicyResponseImpl(new HashMap<>(),
+//                Collections.singletonMap(ROLE_CLAIM, Collections.singleton(HISTORY_ROLE)));
     }
 
     @Override

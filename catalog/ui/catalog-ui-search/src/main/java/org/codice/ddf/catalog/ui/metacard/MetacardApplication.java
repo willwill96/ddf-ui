@@ -54,7 +54,7 @@ import org.opengis.filter.sort.SortBy;
 import com.google.common.collect.ImmutableMap;
 
 import ddf.catalog.CatalogFramework;
-import ddf.catalog.core.versioning.HistoryMetacardImpl;
+import ddf.catalog.core.versioning.MetacardVersion;
 import ddf.catalog.data.Attribute;
 import ddf.catalog.data.AttributeDescriptor;
 import ddf.catalog.data.AttributeType;
@@ -196,9 +196,9 @@ public class MetacardApplication implements SparkApplication {
             List<HistoryResponse> response = queryResponse.stream()
                     .map(Result::getMetacard)
                     .map(mc -> new HistoryResponse(mc.getId(),
-                            (String) mc.getAttribute(HistoryMetacardImpl.EDITED_BY)
+                            (String) mc.getAttribute(MetacardVersion.EDITED_BY)
                                     .getValue(),
-                            (Date) mc.getAttribute(HistoryMetacardImpl.VERSIONED)
+                            (Date) mc.getAttribute(MetacardVersion.VERSIONED_ON)
                                     .getValue()))
                     .sorted(Comparator.comparing(HistoryResponse::getVersioned))
                     .collect(Collectors.toList());
@@ -211,14 +211,14 @@ public class MetacardApplication implements SparkApplication {
             String revertId = req.params(":revertid");
 
             Metacard versionMetacard = util.getMetacard(revertId);
-            if (versionMetacard.getAttribute(HistoryMetacardImpl.ACTION)
+            if (versionMetacard.getAttribute(MetacardVersion.ACTION)
                     .getValue()
-                    .equals(HistoryMetacardImpl.Action.DELETED.getKey())) {
+                    .equals(MetacardVersion.Action.DELETED.getKey())) {
             /* can't revert to a deleted.. right now */
                 res.status(400);
                 return "";
             }
-            Metacard revertMetacard = HistoryMetacardImpl.toBasicMetacard(versionMetacard);
+            Metacard revertMetacard = MetacardVersion.toBasicMetacard(versionMetacard);
             catalogFramework.update(new UpdateRequestImpl(id, revertMetacard));
             return util.metacardToJson(revertMetacard);
         });
@@ -401,8 +401,8 @@ public class MetacardApplication implements SparkApplication {
         Filter historyFilter = filterBuilder.attribute(Metacard.TAGS)
                 .is()
                 .equalTo()
-                .text(HistoryMetacardImpl.HISTORY_TAG);
-        Filter idFilter = filterBuilder.attribute(HistoryMetacardImpl.ID_HISTORY)
+                .text(MetacardVersion.VERSION_TAG);
+        Filter idFilter = filterBuilder.attribute(MetacardVersion.VERSION_OF_ID)
                 .is()
                 .equalTo()
                 .text(id);
