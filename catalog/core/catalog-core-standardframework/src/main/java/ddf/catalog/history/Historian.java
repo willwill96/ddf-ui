@@ -9,16 +9,19 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import javax.annotation.Nullable;
+
 import org.apache.shiro.SecurityUtils;
-import org.codice.ddf.security.common.Security;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,25 +31,28 @@ import com.google.common.io.ByteSource;
 import com.google.common.io.Files;
 
 import ddf.catalog.CatalogFramework;
+import ddf.catalog.content.StorageException;
 import ddf.catalog.content.StorageProvider;
 import ddf.catalog.content.data.ContentItem;
 import ddf.catalog.content.data.impl.ContentItemImpl;
 import ddf.catalog.content.operation.CreateStorageRequest;
 import ddf.catalog.content.operation.CreateStorageResponse;
+import ddf.catalog.content.operation.UpdateStorageRequest;
 import ddf.catalog.content.operation.UpdateStorageResponse;
 import ddf.catalog.content.operation.impl.CreateStorageRequestImpl;
 import ddf.catalog.core.versioning.MetacardVersion;
 import ddf.catalog.data.Metacard;
+import ddf.catalog.data.impl.AttributeImpl;
 import ddf.catalog.operation.CreateRequest;
 import ddf.catalog.operation.CreateResponse;
+import ddf.catalog.operation.Operation;
 import ddf.catalog.operation.Update;
 import ddf.catalog.operation.UpdateResponse;
 import ddf.catalog.operation.impl.CreateRequestImpl;
 import ddf.catalog.operation.impl.CreateResponseImpl;
-import ddf.catalog.operation.impl.UpdateResponseImpl;
+import ddf.catalog.source.CatalogProvider;
 import ddf.catalog.source.IngestException;
 import ddf.catalog.source.SourceUnavailableException;
-import ddf.security.Subject;
 
 public class Historian {
     public static final String ALREADY_VERSIONED = "already-versioned";
@@ -57,6 +63,12 @@ public class Historian {
 
     private boolean historyEnabled = true;
 
+    private List<StorageProvider> storageProviders;
+
+    private List<CatalogProvider> catalogProviders;
+
+    private CatalogFramework catalogFramework;
+
     public Historian() {
     }
 
@@ -64,14 +76,8 @@ public class Historian {
             .expireAfterAccess(1, TimeUnit.HOURS)
             .build();
 
-    public CreateRequest versionCreate(CreateRequest createRequest) {
-        if (!historyEnabled) {
-            return createRequest;
-        }
-
-        if (createRequest.getProperties()
-                .getOrDefault(ALREADY_VERSIONED, "")
-                .equals(true)) {
+    public CreateRequest versionCreate(CreateRequest createRequest) throws IngestException {
+        if (doSkip(createRequest)) {
             return createRequest;
         }
 
@@ -82,21 +88,17 @@ public class Historian {
                         MetacardVersion.Action.CREATED,
                         SecurityUtils.getSubject()))
                 .collect(Collectors.toList());
-        updatedMetacardList.addAll(createRequest.getMetacards());
 
-        return new CreateRequestImpl(updatedMetacardList, createRequest.getProperties());
-    }
-
-    public UpdateResponse versionUpdate(UpdateResponse updateResponse,
-            CatalogFramework catalogFramework, StorageProvider storage)
-            throws SourceUnavailableException, IngestException {
-        if (!historyEnabled) {
-            return updateResponse;
+        if (!updatedMetacardList.isEmpty()) {
+            catalogProvider().create(new CreateRequestImpl(updatedMetacardList));
         }
 
-        if (updateResponse.getProperties()
-                .getOrDefault(ALREADY_VERSIONED, false)
-                .equals(true)) {
+        return createRequest;// TODO (RCZ) - remove and return void?
+    }
+
+    public UpdateResponse versionUpdate(UpdateResponse updateResponse)
+            throws SourceUnavailableException, IngestException {
+        if (doSkip(updateResponse)) {
             return updateResponse;
         }
 
@@ -106,64 +108,60 @@ public class Historian {
                 .collect(Collectors.toList());
 
         CreateResponse createdHistory = getVersionedMetacards(inputMetacards,
-                MetacardVersion.Action.UPDATED,
-                catalogFramework);
+                MetacardVersion.Action.UPDATED);
         if (createdHistory == null) {
             return updateResponse;
         }
 
-        Map<String, Serializable> properties = updateResponse.getProperties() != null ?
-                updateResponse.getProperties() :
-                new HashMap<>();
-        properties.put(HISTORY_METACARDS,
-                new ArrayList<Serializable>(createdHistory.getCreatedMetacards()));
+        if (updateResponse.getProperties() != null) {
+            updateResponse.getProperties()
+                    .put(HISTORY_METACARDS, new ArrayList<>(createdHistory.getCreatedMetacards()));
+        }
 
-        return new UpdateResponseImpl(updateResponse.getRequest(),
-                properties,
-                updateResponse.getUpdatedMetacards(),
-                updateResponse.getProcessingErrors());
+        return updateResponse;
     }
 
-    @SuppressWarnings("unchecked")
-    public CreateStorageRequest versionStorageCreate(CreateStorageRequest createStorageRequest) throws IngestException {
-        if (!historyEnabled) {
+    public CreateStorageRequest versionStorageCreate(CreateStorageRequest createStorageRequest)
+            throws IngestException, StorageException {
+        if (doSkip(createStorageRequest)) {
             return createStorageRequest;
         }
 
-        if (createStorageRequest.getProperties()
-                .getOrDefault(ALREADY_VERSIONED, "")
-                .equals(true)) {
-            return createStorageRequest;
-        }
-
+        @SuppressWarnings("unchecked")
         Map<String, Path> tmpContentPaths = (Map<String, Path>) createStorageRequest.getProperties()
                 .getOrDefault(CONTENT_PATHS, new HashMap<>());
-        List<ContentItem> contentItems = createStorageRequest.getContentItems();
 
         List<ContentItem> newContentItems = createStorageRequest.getContentItems()
                 .stream()
                 .map(ContentItem::getMetacard)
                 .distinct()
                 .flatMap(mc -> getVersionedContent(mc,
-                        contentItems,
+                        createStorageRequest.getContentItems(),
                         MetacardVersion.Action.CREATED_CONTENT,
                         tmpContentPaths).stream())
                 .collect(Collectors.toList());
 
-        newContentItems.addAll(createStorageRequest.getContentItems());
-        createStorageRequest.getProperties().put(ALREADY_VERSIONED, true);
-
-        return new CreateStorageRequestImpl(newContentItems,
+        CreateStorageRequestImpl versionStorageRequest = new CreateStorageRequestImpl(
+                newContentItems,
                 createStorageRequest.getId(),
                 createStorageRequest.getProperties());
+        storageProvider().create(versionStorageRequest);
+        storageProvider().commit(versionStorageRequest);
+        catalogProvider().create(new CreateRequestImpl(newContentItems.stream()
+                .map(ContentItem::getMetacard)
+                .distinct()
+                .collect(Collectors.toList())));
+
+        createStorageRequest.getProperties()
+                .put(ALREADY_VERSIONED, true);
+        return createStorageRequest;
     }
 
-    // TODO (RCZ) - should i throw the IOException or catch and rethrow as storage
-    public String versionUpdateStorage(UpdateStorageResponse updateStorageResponse,
-            HashMap<String, Path> tmpContentPaths, CatalogFramework catalogFramework,
-            StorageProvider storage) throws IOException {
-        if (!historyEnabled) {
-            return null;
+    public Optional<String> versionUpdateStorage(UpdateStorageRequest streamUpdateRequest,
+            UpdateStorageResponse updateStorageResponse, HashMap<String, Path> tmpContentPaths)
+            throws IOException {
+        if (doSkip(updateStorageResponse)) {
+            return Optional.empty();
         }
 
         String transactionKey = UUID.randomUUID()
@@ -171,6 +169,11 @@ public class Historian {
 
         List<Callable<Boolean>> preStaged = new ArrayList<>(2);
         staged.put(transactionKey, preStaged);
+
+        streamUpdateRequest.getProperties()
+                .put(ALREADY_VERSIONED, true);
+        updateStorageResponse.getProperties()
+                .put(ALREADY_VERSIONED, true);
 
         List<ContentItem> versionedContentItems = updateStorageResponse.getUpdatedContentItems()
                 .stream()
@@ -195,8 +198,26 @@ public class Historian {
             CreateStorageRequestImpl createStorageRequest = new CreateStorageRequestImpl(
                     versionedContentItems,
                     props);
-            CreateStorageResponse createStorageResponse = storage.create(createStorageRequest);
-            storage.commit(createStorageRequest);
+            CreateStorageResponse createStorageResponse = storageProvider().create(
+                    createStorageRequest);
+            storageProvider().commit(createStorageRequest);
+            createStorageResponse.getCreatedContentItems()
+                    .forEach((ci) -> {
+                        // TODO (RCZ) - Should this be moved into FileSystemStorageProvider (with the update)
+                        // or should FSSP update be moved out?
+
+                        try {
+                            ci.getMetacard()
+                                    .setAttribute(new AttributeImpl(Metacard.RESOURCE_URI,
+                                            ci.getUri()));
+                            ci.getMetacard()
+                                    .setAttribute(new AttributeImpl(Metacard.RESOURCE_SIZE,
+                                            ci.getSize()));
+                        } catch (IOException e) {
+                            LOGGER.warn("Could not get size", e);
+                        }
+
+                    });
             return createStorageResponse.getProcessingErrors() != null
                     && createStorageResponse.getProcessingErrors()
                     .isEmpty();
@@ -205,7 +226,7 @@ public class Historian {
         preStaged.add(() -> {
             Map<String, Serializable> props = new HashMap<>();
             props.put(ALREADY_VERSIONED, true);
-            CreateResponse createResponse = catalogFramework.create(new CreateRequestImpl(
+            CreateResponse createResponse = catalogProvider().create(new CreateRequestImpl(
                     historyMetacards,
                     props));
             return createResponse.getProcessingErrors() != null
@@ -213,7 +234,37 @@ public class Historian {
                     .isEmpty();
         });
 
-        return transactionKey;
+        return Optional.of(transactionKey);
+    }
+
+    public CreateResponse removeHistoryItems(CreateResponse input) {
+        if (doSkip(input)) {
+            return input;
+        }
+
+        List<Metacard> historyMetacards = input.getCreatedMetacards()
+                .stream()
+                .filter(m -> MetacardVersion.getMetacardVersionType()
+                        .getName()
+                        .equals(m.getMetacardType()
+                                .getName()))
+                .collect(Collectors.toList());
+
+        if (historyMetacards.isEmpty()) {
+            return input;
+        }
+
+        List<Metacard> resultMetacards = new ArrayList<>(input.getCreatedMetacards());
+        resultMetacards.removeAll(historyMetacards);
+
+        Map<String, Serializable> properties =
+                input.getProperties() != null ? input.getProperties() : new HashMap<>();
+        properties.put(HISTORY_METACARDS_PROPERTY, new ArrayList<Serializable>(historyMetacards));
+
+        return new CreateResponseImpl(input.getRequest(),
+                properties,
+                resultMetacards,
+                input.getProcessingErrors());
     }
 
     public List<Exception> commit(String historianTransactionKey) {
@@ -247,49 +298,55 @@ public class Historian {
         this.historyEnabled = historyEnabled;
     }
 
+    public List<StorageProvider> getStorageProviders() {
+        return storageProviders;
+    }
+
+    public void setStorageProviders(List<StorageProvider> storageProviders) {
+        this.storageProviders = storageProviders;
+    }
+
+    public List<CatalogProvider> getCatalogProviders() {
+        return catalogProviders;
+    }
+
+    public void setCatalogProviders(List<CatalogProvider> catalogProviders) {
+        this.catalogProviders = catalogProviders;
+    }
+
+    public CatalogFramework getCatalogFramework() {
+        return catalogFramework;
+    }
+
+    public void setCatalogFramework(CatalogFramework catalogFramework) {
+        this.catalogFramework = catalogFramework;
+    }
+
+    private StorageProvider storageProvider() {
+        return storageProviders.stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private CatalogProvider catalogProvider() {
+        return catalogProviders.stream()
+                .findFirst()
+                .orElse(null);
+    }
+
     private CreateResponse getVersionedMetacards(List<Metacard> metacards,
-            final MetacardVersion.Action action, CatalogFramework catalogFramework)
+            final MetacardVersion.Action action)
             throws SourceUnavailableException, IngestException {
         final List<Metacard> versionedMetacards = metacards.stream()
-                .filter(metacard -> !metacard.getMetacardType()
-                        .equals(MetacardVersion.getMetacardVersionType()))
+                .filter(MetacardVersion::isNotVersion)
                 .map(metacard -> new MetacardVersion(metacard, action, SecurityUtils.getSubject()))
                 .collect(Collectors.toList());
 
         if (versionedMetacards.isEmpty()) {
             return null;
         }
-        return catalogFramework.create(new CreateRequestImpl(metacards));
-    }
 
-    public CreateResponse removeHistoryItems(CreateResponse input) {
-        if (!historyEnabled) {
-            return input;
-        }
-
-        List<Metacard> historyMetacards = input.getCreatedMetacards()
-                .stream()
-                .filter(m -> MetacardVersion.getMetacardVersionType()
-                        .getName()
-                        .equals(m.getMetacardType()
-                                .getName()))
-                .collect(Collectors.toList());
-
-        if (historyMetacards.isEmpty()) {
-            return input;
-        }
-
-        List<Metacard> resultMetacards = new ArrayList<>(input.getCreatedMetacards());
-        resultMetacards.removeAll(historyMetacards);
-
-        Map<String, Serializable> properties =
-                input.getProperties() != null ? input.getProperties() : new HashMap<>();
-        properties.put(HISTORY_METACARDS_PROPERTY, new ArrayList<Serializable>(historyMetacards));
-
-        return new CreateResponseImpl(input.getRequest(),
-                properties,
-                resultMetacards,
-                input.getProcessingErrors());
+        return catalogProvider().create(new CreateRequestImpl(versionedMetacards));
     }
 
     private List<ContentItem> getVersionedContent(Metacard root, List<ContentItem> contentItems,
@@ -355,6 +412,16 @@ public class Historian {
         }
 
         return resultItems;
+    }
+
+    private boolean doSkip(@Nullable Operation op) {
+        return doSkip(Optional.ofNullable(op.getProperties())
+                .orElse(Collections.emptyMap()));
+    }
+
+    private boolean doSkip(Map<String, Serializable> properties) {
+        return !historyEnabled || properties.getOrDefault(ALREADY_VERSIONED, false)
+                .equals(true);
     }
 
     private static class WrappedByteSource extends ByteSource {

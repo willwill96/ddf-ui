@@ -61,7 +61,6 @@ import com.google.common.collect.Sets;
 import com.google.common.io.ByteSource;
 
 import ddf.catalog.CatalogFramework;
-import ddf.catalog.core.versioning.MetacardVersion;
 import ddf.catalog.content.data.impl.ContentItemImpl;
 import ddf.catalog.content.operation.impl.UpdateStorageRequestImpl;
 import ddf.catalog.core.versioning.MetacardVersion;
@@ -157,10 +156,10 @@ public class MetacardApplication implements SparkApplication {
             List<String> ids = JsonFactory.create()
                     .parser()
                     .parseList(String.class, req.body());
-            DeleteResponse deleteResponse =
-                    catalogFramework.delete(new DeleteRequestImpl(new ArrayList<>(ids),
-                            Metacard.ID,
-                            null));
+            DeleteResponse deleteResponse = catalogFramework.delete(new DeleteRequestImpl(new ArrayList<>(ids),
+                    Metacard.ID,
+                    null));
+            res.type(APPLICATION_JSON);
             if (deleteResponse.getProcessingErrors() != null
                     && !deleteResponse.getProcessingErrors()
                     .isEmpty()) {
@@ -177,7 +176,7 @@ public class MetacardApplication implements SparkApplication {
                     .parseList(MetacardChanges.class, req.body());
 
             UpdateResponse updateResponse = patchMetacards(metacardChanges);
-
+            res.type(APPLICATION_JSON);
             if (updateResponse.getProcessingErrors() != null
                     && !updateResponse.getProcessingErrors()
                     .isEmpty()) {
@@ -195,12 +194,14 @@ public class MetacardApplication implements SparkApplication {
             List<Metacard> results = util.getRecentMetacards(pageSize,
                     pageNumber,
                     SubjectUtils.getEmailAddress(SecurityUtils.getSubject()));
+            res.type(APPLICATION_JSON);
             return util.getJson(results);
         });
 
         put("/validate/attribute/:attribute", TEXT_PLAIN, (req, res) -> {
             String attribute = req.params(":attribute");
             String value = req.body();
+            res.type(APPLICATION_JSON);
             return util.getJson(validator.validateAttribute(attribute, value));
         });
 
@@ -237,23 +238,22 @@ public class MetacardApplication implements SparkApplication {
 
             Optional<Metacard> contentVersion = queryResponse.stream()
                     .map(Result::getMetacard)
-                    .filter(mc -> getVersionedOnDate(mc).isBefore(getVersionedOnDate(versionMetacard)))
-                    .sorted(Comparator.comparing(mc -> util.parseToDate(mc.getAttribute(
+                    .filter(mc ->
+                            getVersionedOnDate(mc).isBefore(getVersionedOnDate(versionMetacard))
+                                    || getVersionedOnDate(mc).equals(getVersionedOnDate(
+                                    versionMetacard)))
+                    .sorted(Comparator.comparing((Metacard mc) -> util.parseToDate(mc.getAttribute(
                             MetacardVersion.VERSIONED_ON)
                             .getValue())))
-                    .sequential()
                     .findFirst();
 
-            if (CONTENT_ACTIONS.contains(MetacardVersion.Action.ofMetacard(versionMetacard))) {
-                /* restoring a content change */
-                revertContentandMetacard(versionMetacard, versionMetacard, id);
-            } else if (!contentVersion.isPresent()) {
+            if (!contentVersion.isPresent()) {
                 /* no content versions, just restore metacard */
                 revertMetacard(versionMetacard, id);
             } else {
                 revertContentandMetacard(contentVersion.get(), versionMetacard, id);
             }
-
+            res.type(APPLICATION_JSON);
             return util.metacardToJson(MetacardVersion.toBasicMetacard(versionMetacard));
         });
 
@@ -270,7 +270,7 @@ public class MetacardApplication implements SparkApplication {
                         association.getTitle()));
                 resultMap.put(association.getType(), result);
             }
-
+            res.type(APPLICATION_JSON);
             return util.getJson(resultMap.values());
         });
 
@@ -292,12 +292,14 @@ public class MetacardApplication implements SparkApplication {
                     .map(ar -> ar.type)
                     .collect(Collectors.toList());
             associated.putAssociations(associations, emptyAssociations);
+            res.type(APPLICATION_JSON);
             return req.body();
         });
 
         get("/workspaces/:id", (req, res) -> {
             String id = req.params(":id");
             Metacard metacard = util.getMetacard(id);
+            res.type(APPLICATION_JSON);
             return util.getJson(transformer.transform(metacard));
         });
 
@@ -309,7 +311,7 @@ public class MetacardApplication implements SparkApplication {
                     .map(Map.Entry::getValue)
                     .map(Result::getMetacard)
                     .collect(Collectors.toList());
-
+            res.type(APPLICATION_JSON);
             return util.getJson(transformer.transform(workspaceList));
         });
 
@@ -336,12 +338,14 @@ public class MetacardApplication implements SparkApplication {
             metacard.setAttribute(new AttributeImpl(Metacard.ID, id));
 
             Metacard updated = updateMetacard(id, metacard);
+            res.type(APPLICATION_JSON);
             return util.getJson(transformer.transform(updated));
         });
 
         delete("/workspaces/:id", APPLICATION_JSON, (req, res) -> {
             String id = req.params(":id");
             catalogFramework.delete(new DeleteRequestImpl(id));
+            res.type(APPLICATION_JSON);
             return "";
         });
 
@@ -381,6 +385,7 @@ public class MetacardApplication implements SparkApplication {
                 latestResource.getResource()
                         .getSize(),
                 MetacardVersion.toBasicMetacard(versionMetacard));
+        //// TODO (RCZ) - if no worky, make sure set resource-uri to null on content item
         catalogFramework.update(new UpdateStorageRequestImpl(Collections.singletonList(contentItem),
                 id,
                 new HashMap<>()));

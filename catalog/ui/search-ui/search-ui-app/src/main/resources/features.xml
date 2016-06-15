@@ -25,6 +25,8 @@
         <bundle>mvn:ddf.ui.search/search-htmltransformer/${project.version}</bundle>
 
         <bundle>mvn:ddf.ui.search/search-endpoint/${project.version}</bundle>
+        <bundle>mvn:ddf.ui/catalog-ui-search/${project.version}</bundle>
+
         <configfile finalname="/data/solr/workspace/conf/solr.xml">
             mvn:ddf.platform.solr/platform-solr-server-standalone/${project.version}/xml/solr
         </configfile>
@@ -69,7 +71,6 @@
             mvn:ddf.platform.solr/platform-solr-server-standalone/${project.version}/txt/synonyms
         </configfile>
 
-        <bundle>mvn:ddf.ui/catalog-ui-search/${project.version}</bundle>
         <configfile finalname="/etc/ddf.security.pdp.realm.AuthzRealm.config">
             mvn:ddf.ui/catalog-ui-search/${project.version}/config/workspace-roles
         </configfile>
@@ -88,7 +89,6 @@
              description="The DDF Standard Search UI is an application that not only provides results in a html format but also provides a convenient, simple querying user interface.\nThe left pane of the SearchUI contains basic fields to query the Catalog and other Sources. The right pane consists of a map.\nIt includes both standard (3d globe) and simple (text page) versions.::DDF Standard Search UI">
         <configfile finalname="/etc/org.codice.ddf.ui.searchui.filter.RedirectServlet.config" override="false">mvn:ddf.ui.search/search-ui-app/${project.version}/config/redirect</configfile>
         <feature prerequisite="true">catalog-app</feature>
-        <feature prerequisite="true">catalog-versioning-plugin</feature>
         <feature prerequisite="true">catalog-core-validator</feature>
     </feature>
 

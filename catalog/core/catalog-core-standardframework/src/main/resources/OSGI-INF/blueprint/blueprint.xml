@@ -322,6 +322,9 @@
     <bean id="historian" class="ddf.catalog.history.Historian">
         <cm:managed-properties persistent-id="ddf.catalog.history.Historian"
                                update-strategy="container-managed"/>
+        <property name="catalogProviders" ref="catalogProviderSortedList"/>
+        <property name="storageProviders" ref="storageProviderSortedList"/>
+        <property name="catalogFramework" ref="ddf"/>
     </bean>
 
     <reference id="filterBuilder" interface="ddf.catalog.filter.FilterBuilder"/>
