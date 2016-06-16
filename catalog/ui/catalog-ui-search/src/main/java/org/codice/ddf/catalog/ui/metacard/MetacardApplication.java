@@ -57,7 +57,6 @@ import org.opengis.filter.sort.SortBy;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 import com.google.common.io.ByteSource;
 
 import ddf.catalog.CatalogFramework;
@@ -156,9 +155,10 @@ public class MetacardApplication implements SparkApplication {
             List<String> ids = JsonFactory.create()
                     .parser()
                     .parseList(String.class, req.body());
-            DeleteResponse deleteResponse = catalogFramework.delete(new DeleteRequestImpl(new ArrayList<>(ids),
-                    Metacard.ID,
-                    null));
+            DeleteResponse deleteResponse =
+                    catalogFramework.delete(new DeleteRequestImpl(new ArrayList<>(ids),
+                            Metacard.ID,
+                            null));
             res.type(APPLICATION_JSON);
             if (deleteResponse.getProcessingErrors() != null
                     && !deleteResponse.getProcessingErrors()
@@ -242,9 +242,11 @@ public class MetacardApplication implements SparkApplication {
                             getVersionedOnDate(mc).isBefore(getVersionedOnDate(versionMetacard))
                                     || getVersionedOnDate(mc).equals(getVersionedOnDate(
                                     versionMetacard)))
+                    .filter(mc -> CONTENT_ACTIONS.contains(MetacardVersion.Action.ofMetacard(mc)))
                     .sorted(Comparator.comparing((Metacard mc) -> util.parseToDate(mc.getAttribute(
                             MetacardVersion.VERSIONED_ON)
-                            .getValue())))
+                            .getValue()))
+                            .reversed())
                     .findFirst();
 
             if (!contentVersion.isPresent()) {
@@ -391,9 +393,9 @@ public class MetacardApplication implements SparkApplication {
                 new HashMap<>()));
 
         // Probably don't need this if the actual metacard gets put back in correctly in the update
-//        if (latestContent != versionMetacard) {
-//            revertMetacard(versionMetacard, id);
-//        }
+        //        if (latestContent != versionMetacard) {
+        //            revertMetacard(versionMetacard, id);
+        //        }
     }
 
     private Instant getVersionedOnDate(Metacard mc) {

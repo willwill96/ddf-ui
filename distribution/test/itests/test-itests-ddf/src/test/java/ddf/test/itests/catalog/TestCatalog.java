@@ -30,6 +30,7 @@ import static com.jayway.restassured.RestAssured.given;
 import static com.jayway.restassured.RestAssured.when;
 import static ddf.catalog.data.impl.BasicTypes.VALIDATION_WARNINGS;
 import static ddf.common.test.WaitCondition.expect;
+import static ddf.test.itests.common.CswQueryBuilder.AND;
 import static ddf.test.itests.common.CswQueryBuilder.NOT;
 import static ddf.test.itests.common.CswQueryBuilder.OR;
 import static ddf.test.itests.common.CswQueryBuilder.PROPERTY_IS_EQUAL_TO;

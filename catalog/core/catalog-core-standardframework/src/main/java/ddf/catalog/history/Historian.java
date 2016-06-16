@@ -141,6 +141,17 @@ public class Historian {
                         tmpContentPaths).stream())
                 .collect(Collectors.toList());
 
+        newContentItems.forEach(ci -> {
+            if (ci.getMetacard().getResourceURI() == null) {
+                ci.getMetacard().setAttribute(new AttributeImpl(Metacard.RESOURCE_URI, ci.getUri()));
+                try {
+                    ci.getMetacard().setAttribute(new AttributeImpl(Metacard.RESOURCE_SIZE, ci.getSize()));
+                } catch (IOException e) {
+                    LOGGER.warn("Could not get size of content item", e);
+                }
+            }
+        });
+
         CreateStorageRequestImpl versionStorageRequest = new CreateStorageRequestImpl(
                 newContentItems,
                 createStorageRequest.getId(),

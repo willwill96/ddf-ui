@@ -1352,8 +1352,6 @@ public class CatalogFrameworkImpl extends DescribableImpl implements CatalogFram
                             .collect(Collectors.toList()), String.class),
                             new ArrayList<>(metacardMap.values()));
             updateRequest.setProperties(streamUpdateRequest.getProperties());
-            updateRequest.getProperties()
-                    .put(Historian.ALREADY_VERSIONED, true);
             updateResponse = update(updateRequest);
         } catch (Exception e) {
             if (updateStorageRequest != null) {
