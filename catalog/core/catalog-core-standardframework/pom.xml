@@ -46,6 +46,15 @@
             <artifactId>action-core-api</artifactId>
         </dependency>
         <dependency>
+            <groupId>ddf.security</groupId>
+            <artifactId>ddf-security-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ddf.security.handler</groupId>
+            <artifactId>security-handler-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>ddf.catalog.core</groupId>
             <artifactId>catalog-core-metricsplugin</artifactId>
             <version>${project.version}</version>
@@ -53,6 +62,11 @@
         <dependency>
             <groupId>ddf.catalog.core</groupId>
             <artifactId>catalog-core-commons</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ddf.catalog.core</groupId>
+            <artifactId>versioning-common</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.shiro</groupId>
@@ -212,6 +226,11 @@
             <artifactId>mime-core-impl</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--<dependency>-->
+            <!--<groupId>ddf.security.handler</groupId>-->
+            <!--<artifactId>security-handler-api</artifactId>-->
+            <!--<version>${project.version}</version>-->
+        <!--</dependency>-->
     </dependencies>
     <build>
         <plugins>
@@ -221,28 +240,33 @@
                 <configuration>
                     <instructions>
                         <Bundle-SymbolicName>${project.artifactId}</Bundle-SymbolicName>
+
                         <Embed-Dependency>
                             catalog-core-solr,
                             notifications,
                             activities,
                             hazelcast;scope=runtime|compile,
                             commons-collections,
-                            platform-util
+                            platform-util,
+                            versioning-common,
+                            ddf-security-common
                         </Embed-Dependency>
                         <Private-Package>
                             ddf.catalog.cache.impl,
                             ddf.catalog.cache.solr.impl,
-                            ddf.catalog.event.retrievestatus,
-                            ddf.catalog.impl,
                             ddf.catalog.data.impl,
-                            ddf.catalog.operation.impl,
-                            ddf.catalog.util.impl,
+                            ddf.catalog.event.retrievestatus,
                             ddf.catalog.federation.base,
                             ddf.catalog.filter.impl,
-                            ddf.catalog.source.impl,
+                            ddf.catalog.history,
+                            ddf.catalog.impl,
+                            ddf.catalog.operation.impl,
                             ddf.catalog.resource.download,
                             ddf.catalog.resource.impl,
-                            ddf.catalog.resourceretriever
+                            ddf.catalog.resourceretriever,
+                            ddf.catalog.source.impl,
+                            ddf.catalog.util.impl,
+                            org.codice.ddf.platform.util
                         </Private-Package>
                         <Export-Package>
                             ddf.catalog.cache,
@@ -282,7 +306,10 @@
                             ddf.measure;version="2.0",
                             ddf.mime,
                             ddf.security,
+                            org.codice.ddf.security.handler.api,
+                            ddf.security.assertion,
                             ddf.security.permission,
+                            ddf.security.service,
                             javax.activation,
                             javax.annotation,
                             javax.crypto,
@@ -321,6 +348,7 @@
                             javax.xml.xpath,
                             jline,
                             org.apache.commons.logging;version="[1.1,2)",
+                            org.apache.cxf.ws.security.tokenstore,
                             org.apache.cxf.jaxrs.client,
                             org.apache.cxf.jaxrs.ext.multipart,
                             org.apache.shiro,
@@ -336,6 +364,7 @@
                             org.apache.xerces.xni.parser,
                             org.apache.xml.resolver,
                             org.apache.xml.resolver.helpers,
+                            <!--org.codice.ddf.security.handler.api,-->
                             org.geotools.filter.visitor,
                             org.joda.convert,
                             org.opengis.annotation,
