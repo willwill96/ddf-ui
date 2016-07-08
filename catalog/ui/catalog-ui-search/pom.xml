@@ -162,6 +162,10 @@
             <artifactId>persistence-core-api</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>ddf.security.core</groupId>
+            <artifactId>security-core-api</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -229,7 +233,8 @@
                             spark-core,
                             gt-cql,
                             spatial4j,
-                            commons-lang3
+                            commons-lang3,
+
                         </Embed-Dependency>
                         <Web-ContextPath>/search/catalog</Web-ContextPath>
                         <_wab>src/main/webapp,${project.build.directory}/webapp</_wab>

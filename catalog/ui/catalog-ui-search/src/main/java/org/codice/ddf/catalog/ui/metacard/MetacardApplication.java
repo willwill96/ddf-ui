@@ -22,7 +22,10 @@ import static spark.Spark.patch;
 import static spark.Spark.post;
 import static spark.Spark.put;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -34,6 +37,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import javax.ws.rs.NotFoundException;
@@ -56,8 +60,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.io.ByteSource;
 
 import ddf.catalog.CatalogFramework;
+import ddf.catalog.core.versioning.MetacardVersion;
+import ddf.catalog.content.data.impl.ContentItemImpl;
+import ddf.catalog.content.operation.impl.UpdateStorageRequestImpl;
 import ddf.catalog.core.versioning.MetacardVersion;
 import ddf.catalog.data.Attribute;
 import ddf.catalog.data.AttributeDescriptor;
@@ -69,12 +78,16 @@ import ddf.catalog.federation.FederationException;
 import ddf.catalog.filter.FilterBuilder;
 import ddf.catalog.operation.DeleteResponse;
 import ddf.catalog.operation.QueryResponse;
+import ddf.catalog.operation.ResourceResponse;
 import ddf.catalog.operation.UpdateResponse;
 import ddf.catalog.operation.impl.CreateRequestImpl;
 import ddf.catalog.operation.impl.DeleteRequestImpl;
 import ddf.catalog.operation.impl.QueryImpl;
 import ddf.catalog.operation.impl.QueryRequestImpl;
+import ddf.catalog.operation.impl.ResourceRequestById;
 import ddf.catalog.operation.impl.UpdateRequestImpl;
+import ddf.catalog.resource.ResourceNotFoundException;
+import ddf.catalog.resource.ResourceNotSupportedException;
 import ddf.catalog.source.IngestException;
 import ddf.catalog.source.SourceUnavailableException;
 import ddf.catalog.source.UnsupportedQueryException;
@@ -99,6 +112,10 @@ public class MetacardApplication implements SparkApplication {
     private final WorkspaceTransformer transformer;
 
     private final ExperimentalEnumerationExtractor enumExtractor;
+
+    private final static Set<MetacardVersion.Action> CONTENT_ACTIONS = ImmutableSet.of(
+            MetacardVersion.Action.CREATED_CONTENT,
+            MetacardVersion.Action.UPDATED_CONTENT);
 
     public MetacardApplication(CatalogFramework catalogFramework, FilterBuilder filterBuilder,
             EndpointUtil endpointUtil, Validator validator, WorkspaceTransformer transformer,
@@ -159,6 +176,7 @@ public class MetacardApplication implements SparkApplication {
                     catalogFramework.delete(new DeleteRequestImpl(new ArrayList<>(ids),
                             Metacard.ID,
                             null));
+            res.type(APPLICATION_JSON);
             if (deleteResponse.getProcessingErrors() != null
                     && !deleteResponse.getProcessingErrors()
                     .isEmpty()) {
@@ -175,7 +193,7 @@ public class MetacardApplication implements SparkApplication {
                     .parseList(MetacardChanges.class, req.body());
 
             UpdateResponse updateResponse = patchMetacards(metacardChanges);
-
+            res.type(APPLICATION_JSON);
             if (updateResponse.getProcessingErrors() != null
                     && !updateResponse.getProcessingErrors()
                     .isEmpty()) {
@@ -220,6 +238,7 @@ public class MetacardApplication implements SparkApplication {
         put("/validate/attribute/:attribute", TEXT_PLAIN, (req, res) -> {
             String attribute = req.params(":attribute");
             String value = req.body();
+            res.type(APPLICATION_JSON);
             return util.getJson(validator.validateAttribute(attribute, value));
         });
 
@@ -249,7 +268,34 @@ public class MetacardApplication implements SparkApplication {
 
             Metacard versionMetacard = util.getMetacard(revertId);
 
-            Metacard revertMetacard = MetacardVersion.toBasicMetacard(versionMetacard);
+            List<Result> queryResponse = getMetacardHistory(id);
+            if (queryResponse == null || queryResponse.isEmpty()) {
+                throw new NotFoundException("Could not find metacard with id: " + id);
+            }
+
+            Optional<Metacard> contentVersion = queryResponse.stream()
+                    .map(Result::getMetacard)
+                    .filter(mc ->
+                            getVersionedOnDate(mc).isBefore(getVersionedOnDate(versionMetacard))
+                                    || getVersionedOnDate(mc).equals(getVersionedOnDate(
+                                    versionMetacard)))
+                    .filter(mc -> CONTENT_ACTIONS.contains(MetacardVersion.Action.ofMetacard(mc)))
+                    .sorted(Comparator.comparing((Metacard mc) -> util.parseToDate(mc.getAttribute(
+                            MetacardVersion.VERSIONED_ON)
+                            .getValue()))
+                            .reversed())
+                    .findFirst();
+
+            if (!contentVersion.isPresent()) {
+                /* no content versions, just restore metacard */
+                revertMetacard(versionMetacard, id);
+            } else {
+                revertContentandMetacard(contentVersion.get(), versionMetacard, id);
+            }
+            res.type(APPLICATION_JSON);
+            return util.metacardToJson(MetacardVersion.toBasicMetacard(versionMetacard));
+            //chrises changes
+            /*Metacard revertMetacard = MetacardVersion.toBasicMetacard(versionMetacard);
             if (versionMetacard.getAttribute(MetacardVersion.ACTION)
                     .getValue()
                     .equals(MetacardVersion.Action.DELETED.getKey())) {
@@ -258,7 +304,7 @@ public class MetacardApplication implements SparkApplication {
                 catalogFramework.update(new UpdateRequestImpl(id, revertMetacard));
             }
 
-            return util.metacardToJson(revertMetacard);
+            return util.metacardToJson(revertMetacard);*/
         });
 
         get("/associations/:id", (req, res) -> {
@@ -274,7 +320,7 @@ public class MetacardApplication implements SparkApplication {
                         association.getTitle()));
                 resultMap.put(association.getType(), result);
             }
-
+            res.type(APPLICATION_JSON);
             return util.getJson(resultMap.values());
         });
 
@@ -296,12 +342,14 @@ public class MetacardApplication implements SparkApplication {
                     .map(ar -> ar.type)
                     .collect(Collectors.toList());
             associated.putAssociations(associations, emptyAssociations);
+            res.type(APPLICATION_JSON);
             return req.body();
         });
 
         get("/workspaces/:id", (req, res) -> {
             String id = req.params(":id");
             Metacard metacard = util.getMetacard(id);
+            res.type(APPLICATION_JSON);
             return util.getJson(transformer.transform(metacard));
         });
 
@@ -313,7 +361,7 @@ public class MetacardApplication implements SparkApplication {
                     .map(Map.Entry::getValue)
                     .map(Result::getMetacard)
                     .collect(Collectors.toList());
-
+            res.type(APPLICATION_JSON);
             return util.getJson(transformer.transform(workspaceList));
         });
 
@@ -340,6 +388,7 @@ public class MetacardApplication implements SparkApplication {
             metacard.setAttribute(new AttributeImpl(Metacard.ID, id));
 
             Metacard updated = updateMetacard(id, metacard);
+            res.type(APPLICATION_JSON);
             return util.getJson(transformer.transform(updated));
         });
 
@@ -363,6 +412,53 @@ public class MetacardApplication implements SparkApplication {
             res.status(400);
             res.body(util.getJson(ImmutableMap.of("message", "Invalid values for numbers")));
         });
+    }
+
+    private void revertMetacard(Metacard versionMetacard, String id)
+            throws SourceUnavailableException, IngestException {
+        if (versionMetacard.getAttribute(MetacardVersion.ACTION)
+                .getValue()
+                .equals(MetacardVersion.Action.DELETED.getKey())) {
+            /* can't revert to a deleted.. right now */
+            throw new IllegalArgumentException("Cannot revert to a deleted metacard");
+        }
+        Metacard revertMetacard = MetacardVersion.toBasicMetacard(versionMetacard);
+        catalogFramework.update(new UpdateRequestImpl(id, revertMetacard));
+    }
+
+    private void revertContentandMetacard(Metacard latestContent, Metacard versionMetacard,
+            String id)
+            throws SourceUnavailableException, IngestException, ResourceNotFoundException,
+            IOException, ResourceNotSupportedException {
+        Map<String, Serializable> properties = new HashMap<>();
+        properties.put("no-default-tags", true);
+        ResourceResponse latestResource = catalogFramework.getLocalResource(new ResourceRequestById(
+                latestContent.getId(), properties));
+
+        ContentItemImpl contentItem = new ContentItemImpl(id,
+                new ByteSourceWrapper(() -> latestResource.getResource()
+                        .getInputStream()),
+                latestResource.getResource()
+                        .getMimeTypeValue(),
+                latestResource.getResource()
+                        .getName(),
+                latestResource.getResource()
+                        .getSize(),
+                MetacardVersion.toBasicMetacard(versionMetacard));
+        //// TODO (RCZ) - if no worky, make sure set resource-uri to null on content item
+        catalogFramework.update(new UpdateStorageRequestImpl(Collections.singletonList(contentItem),
+                id,
+                new HashMap<>()));
+
+        // Probably don't need this if the actual metacard gets put back in correctly in the update
+        //        if (latestContent != versionMetacard) {
+        //            revertMetacard(versionMetacard, id);
+        //        }
+    }
+
+    private Instant getVersionedOnDate(Metacard mc) {
+        return util.parseToDate(mc.getAttribute(MetacardVersion.VERSIONED_ON)
+                .getValue());
     }
 
     private AttributeDescriptor getDescriptor(Metacard target, String attribute) {
@@ -485,6 +581,19 @@ public class MetacardApplication implements SparkApplication {
 
         AssociationResult(String type) {
             this.type = type;
+        }
+    }
+
+    private static class ByteSourceWrapper extends ByteSource {
+        Supplier<InputStream> supplier;
+
+        ByteSourceWrapper(Supplier<InputStream> supplier) {
+            this.supplier = supplier;
+        }
+
+        @Override
+        public InputStream openStream() throws IOException {
+            return supplier.get();
         }
     }
 }
