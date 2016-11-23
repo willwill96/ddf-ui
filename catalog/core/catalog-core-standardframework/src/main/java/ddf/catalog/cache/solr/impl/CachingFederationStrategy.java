@@ -13,6 +13,7 @@
  */
 package ddf.catalog.cache.solr.impl;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -53,6 +54,7 @@ import ddf.catalog.operation.UpdateResponse;
 import ddf.catalog.operation.impl.QueryImpl;
 import ddf.catalog.operation.impl.QueryRequestImpl;
 import ddf.catalog.operation.impl.QueryResponseImpl;
+import ddf.catalog.operation.impl.SourceResponseImpl;
 import ddf.catalog.plugin.PluginExecutionException;
 import ddf.catalog.plugin.PostFederatedQueryPlugin;
 import ddf.catalog.plugin.PostIngestPlugin;
@@ -60,6 +62,7 @@ import ddf.catalog.plugin.PreFederatedQueryPlugin;
 import ddf.catalog.plugin.StopProcessingException;
 import ddf.catalog.source.CatalogProvider;
 import ddf.catalog.source.Source;
+import ddf.catalog.source.UnsupportedQueryException;
 import ddf.catalog.util.impl.RelevanceResultComparator;
 import ddf.catalog.util.impl.Requests;
 
@@ -238,8 +241,7 @@ public class CachingFederationStrategy implements FederationStrategy, PostIngest
                     try {
                         for (PreFederatedQueryPlugin service : preQuery) {
                             try {
-                                sourceQueryRequest = service.process(source,
-                                        sourceQueryRequest);
+                                sourceQueryRequest = service.process(source, sourceQueryRequest);
                             } catch (PluginExecutionException e) {
                                 LOGGER.info("Error executing PreFederatedQueryPlugin", e);
                             }
@@ -292,18 +294,6 @@ public class CachingFederationStrategy implements FederationStrategy, PostIngest
         } else {
             queryResponse = queryResponseQueue;
             LOGGER.debug("returning returnResults: {}", queryResponse);
-        }
-
-        try {
-            for (PostFederatedQueryPlugin service : postQuery) {
-                try {
-                    queryResponse = service.process(queryResponse);
-                } catch (PluginExecutionException e) {
-                    LOGGER.info("Error executing PostFederatedQueryPlugin", e);
-                }
-            }
-        } catch (StopProcessingException e) {
-            LOGGER.info("Plugin stopped processing", e);
         }
 
         LOGGER.debug("returning Query Results: {}", queryResponse);
@@ -534,29 +524,58 @@ public class CachingFederationStrategy implements FederationStrategy, PostIngest
 
         private final Source source;
 
+        private final Map<String, Serializable> requestProperties;
+
         public CallableSourceResponse(Source source, QueryRequest request) {
             this.source = source;
-            this.request = request;
+            this.requestProperties = new HashMap<>(request.getProperties());
+            this.request = new QueryRequestImpl(request.getQuery(), requestProperties);
         }
 
         @Override
         public SourceResponse call() throws Exception {
-            final SourceResponse sourceResponse =
-                    source.query(new QueryRequestImpl(request.getQuery(), request.getProperties()));
+            SourceResponse sourceResponse = null;
+            try {
+                sourceResponse = source.query(new QueryRequestImpl(request.getQuery(),
+                        request.getProperties()));
+            } catch (UnsupportedQueryException e) {
+                LOGGER.info("Error querying source {}", source.getId(), e);
+            }
+
+            QueryResponse queryResponse = new QueryResponseImpl(request,
+                    sourceResponse == null ? new ArrayList<>() : sourceResponse.getResults(),
+                    true,
+                    sourceResponse == null ? 0L : sourceResponse.getHits(),
+                    requestProperties);
+
+            for (PostFederatedQueryPlugin service : postQuery) {
+                try {
+                    queryResponse = service.process(queryResponse);
+                } catch (Throwable e) {
+                    LOGGER.info("Error executing PostFederatedQueryPlugin", e);
+                }
+            }
+
+            if (sourceResponse == null) {
+                return null;
+            }
+
+            sourceResponse = new SourceResponseImpl(request,
+                    queryResponse.getProperties(),
+                    queryResponse.getResults(),
+                    queryResponse.getHits());
 
             if (INDEX_QUERY_MODE.equals(request.getPropertyValue(QUERY_MODE))) {
                 cacheCommitPhaser.add(sourceResponse.getResults());
             } else if (!NATIVE_QUERY_MODE.equals(request.getPropertyValue(QUERY_MODE))) {
                 if (isCachingEverything || UPDATE_QUERY_MODE.equals(request.getPropertyValue(
                         QUERY_MODE))) {
-                    cacheExecutorService.submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                cacheBulkProcessor.add(sourceResponse.getResults());
-                            } catch (Throwable throwable) {
-                                LOGGER.warn("Unable to add results for bulk processing", throwable);
-                            }
+                    final SourceResponse sourceResponseCopy = sourceResponse;
+                    cacheExecutorService.submit(() -> {
+                        try {
+                            cacheBulkProcessor.add(sourceResponseCopy.getResults());
+                        } catch (Throwable throwable) {
+                            LOGGER.warn("Unable to add results for bulk processing", throwable);
                         }
                     });
                 }
@@ -611,6 +630,7 @@ public class CachingFederationStrategy implements FederationStrategy, PostIngest
             this.forceTermination();
             phaseScheduler.shutdown();
         }
+
     }
 
     public void setShowErrors(boolean showErrors) {
