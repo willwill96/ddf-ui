@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Maven: org.codice.thirdparty:gt-opengis:19.1_1">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/codice/thirdparty/gt-opengis/19.1_1/gt-opengis-19.1_1.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/org/codice/thirdparty/gt-opengis/19.1_1/gt-opengis-19.1_1-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/codice/thirdparty/gt-opengis/19.1_1/gt-opengis-19.1_1-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

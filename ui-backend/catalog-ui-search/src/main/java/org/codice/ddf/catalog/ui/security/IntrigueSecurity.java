@@ -197,7 +197,7 @@ public class IntrigueSecurity {
                               return certs;
                             }
                           });
-                } catch (SecurityServiceException sse) {
+                } catch (Exception sse) {
                   LOGGER.warn("Unable to request subject for system user.", sse);
                 }
               }

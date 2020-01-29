@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Maven: ddf.mime.tika:mime-tika-resolver:2.21.0">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/ddf/mime/tika/mime-tika-resolver/2.21.0/mime-tika-resolver-2.21.0.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/ddf/mime/tika/mime-tika-resolver/2.21.0/mime-tika-resolver-2.21.0-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/ddf/mime/tika/mime-tika-resolver/2.21.0/mime-tika-resolver-2.21.0-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
