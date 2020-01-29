@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/ui-backend/backend.iml" filepath="$PROJECT_DIR$/ui-backend/backend.iml" />
+      <module fileurl="file://$PROJECT_DIR$/catalog-ui.iml" filepath="$PROJECT_DIR$/catalog-ui.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ui-backend/catalog-ui-enumeration/catalog-ui-enumeration.iml" filepath="$PROJECT_DIR$/ui-backend/catalog-ui-enumeration/catalog-ui-enumeration.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ui-backend/catalog-ui-oauth/catalog-ui-oauth.iml" filepath="$PROJECT_DIR$/ui-backend/catalog-ui-oauth/catalog-ui-oauth.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ui-backend/catalog-ui-search/catalog-ui-search.iml" filepath="$PROJECT_DIR$/ui-backend/catalog-ui-search/catalog-ui-search.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ui-backend/catalog-ui-search-api/catalog-ui-search-api.iml" filepath="$PROJECT_DIR$/ui-backend/catalog-ui-search-api/catalog-ui-search-api.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ui-backend/intrigue-ui-app/intrigue-ui-app.iml" filepath="$PROJECT_DIR$/ui-backend/intrigue-ui-app/intrigue-ui-app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ui-backend/query-template-migration/querytemplatemigration.iml" filepath="$PROJECT_DIR$/ui-backend/query-template-migration/querytemplatemigration.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ui-frontend/ui-frontend.iml" filepath="$PROJECT_DIR$/ui-frontend/ui-frontend.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ui-backend/zip-splitter/zip-splitter.iml" filepath="$PROJECT_DIR$/ui-backend/zip-splitter/zip-splitter.iml" />
+    </modules>
+  </component>
+</project>
