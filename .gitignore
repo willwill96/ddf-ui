@@ -3,6 +3,6 @@ target/
 node/
 *.iml
 .DS_Store
-.idea/
+*.idea
 pom.xml.versionsBackup
 docs/build
